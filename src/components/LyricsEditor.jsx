@@ -1,3 +1,5 @@
+import { inferTitleFromText } from "../utils/lyricsFormatting.js";
+
 export default function LyricsEditor({
   title,
   artist,
@@ -11,6 +13,16 @@ export default function LyricsEditor({
   hasSavedVersion,
   isDirty,
 }) {
+  // Infer the title from the first line of pasted lyrics, but only when the
+  // title field is currently empty — never overwrite something the user typed.
+  const handleLyricsPaste = (e) => {
+    if (title.trim()) return;
+    const pastedText = e.clipboardData?.getData("text");
+    if (!pastedText) return;
+    const inferred = inferTitleFromText(pastedText);
+    if (inferred) onChangeTitle(inferred);
+  };
+
   return (
     <div className="flex flex-col gap-3 px-4 pb-28 pt-3">
       <div className="grid grid-cols-2 gap-2">
@@ -31,13 +43,18 @@ export default function LyricsEditor({
       <textarea
         value={lyrics}
         onChange={(e) => onChangeLyrics(e.target.value)}
+        onPaste={handleLyricsPaste}
         placeholder="Paste your lyrics here…"
         rows={14}
         className="w-full rounded-lg bg-stage-surface border border-stage-border px-3 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-spot resize-y"
       />
 
       <div className="flex items-center gap-2 text-xs text-ink-faint">
-        <span>{lyrics.trim() ? `${lyrics.trim().split(/\s+/).length} words` : 'No lyrics yet'}</span>
+        <span>
+          {lyrics.trim()
+            ? `${lyrics.trim().split(/\s+/).length} words`
+            : "No lyrics yet"}
+        </span>
         {isDirty && <span className="text-spot">· unsaved changes</span>}
       </div>
 
@@ -71,5 +88,5 @@ export default function LyricsEditor({
         </button>
       </div>
     </div>
-  )
+  );
 }

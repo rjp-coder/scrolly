@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 const STORAGE_KEY = 'lyric-scroller:songs'
+const EXPORT_FORMAT_VERSION = 1
 
 function loadSongs() {
   try {
@@ -18,6 +19,21 @@ function saveSongs(songs) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(songs))
   } catch {
     // localStorage may be full or unavailable (private browsing) — fail quietly
+  }
+}
+
+function normalizeSong(song, fallbackId) {
+  const id = song?.id || fallbackId || crypto.randomUUID()
+  const now = Date.now()
+  return {
+    id,
+    title: (song?.title || '').trim() || 'Untitled',
+    artist: (song?.artist || '').trim(),
+    lyrics: song?.lyrics ?? '',
+    fontSize: Number.isFinite(song?.fontSize) ? song.fontSize : 28,
+    speed: Number.isFinite(song?.speed) ? song.speed : 30,
+    createdAt: Number.isFinite(song?.createdAt) ? song.createdAt : now,
+    updatedAt: Number.isFinite(song?.updatedAt) ? song.updatedAt : now,
   }
 }
 
@@ -56,5 +72,54 @@ export function useSongLibrary() {
     setSongs((prev) => prev.filter((s) => s.id !== id))
   }, [])
 
-  return { songs, upsertSong, deleteSong }
+  /** Serializes the whole library to a JSON string suitable for a file download. */
+  const exportSongs = useCallback(() => {
+    const payload = {
+      app: 'lyric-scroller',
+      formatVersion: EXPORT_FORMAT_VERSION,
+      exportedAt: new Date().toISOString(),
+      songs,
+    }
+    return JSON.stringify(payload, null, 2)
+  }, [songs])
+
+  /**
+   * Merges songs from a previously exported JSON string into the library.
+   * Songs with a matching id overwrite the existing entry; everything else
+   * is added alongside what's already saved. Returns the number of songs
+   * imported, or throws an Error with a user-facing message on bad input.
+   */
+  const importSongs = useCallback((jsonText) => {
+    let parsed
+    try {
+      parsed = JSON.parse(jsonText)
+    } catch {
+      throw new Error("That file isn't valid JSON.")
+    }
+
+    const incoming = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.songs)
+        ? parsed.songs
+        : null
+
+    if (!incoming) {
+      throw new Error("That file doesn't look like a Lyric Scroller export.")
+    }
+
+    let importedCount = 0
+    setSongs((prev) => {
+      const byId = new Map(prev.map((s) => [s.id, s]))
+      for (const raw of incoming) {
+        if (!raw || typeof raw !== 'object') continue
+        const normalized = normalizeSong(raw)
+        byId.set(normalized.id, normalized)
+        importedCount += 1
+      }
+      return Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt)
+    })
+    return importedCount
+  }, [])
+
+  return { songs, upsertSong, deleteSong, exportSongs, importSongs }
 }

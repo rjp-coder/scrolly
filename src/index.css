@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* Dark "stage" palette — the default theme */
 @theme {
   --color-stage-bg: #0E0F12;
   --color-stage-surface: #1A1B20;
@@ -21,6 +22,24 @@
   --shadow-spotlight: 0 0 40px 4px rgba(232, 163, 61, 0.15);
 }
 
+/* Light "matinee" palette — toggled by adding .light to <html> */
+:root.light {
+  --color-stage-bg: #FAF7F0;
+  --color-stage-surface: #FFFFFF;
+  --color-stage-surface2: #F1ECE1;
+  --color-stage-border: #E2DCC9;
+
+  --color-ink: #1C1B18;
+  --color-ink-dim: #57544A;
+  --color-ink-faint: #8A8576;
+
+  --color-spot: #C97A1A;
+  --color-spot-dim: #E8C99A;
+  --color-spot-glow: #F0B36B;
+
+  --shadow-spotlight: 0 0 32px 2px rgba(201, 122, 26, 0.18);
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -29,6 +48,7 @@ body {
   @apply bg-stage-bg text-ink font-body;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Slim, dark scrollbar for the lyrics pane */
