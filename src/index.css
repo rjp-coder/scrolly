@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-stage-bg: #0E0F12;
+  --color-stage-surface: #1A1B20;
+  --color-stage-surface2: #222329;
+  --color-stage-border: #2D2E35;
+
+  --color-ink: #EDEAE3;
+  --color-ink-dim: #9A9890;
+  --color-ink-faint: #6B6F76;
+
+  --color-spot: #E8A33D;
+  --color-spot-dim: #6B4E23;
+  --color-spot-glow: #F5C277;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --shadow-spotlight: 0 0 40px 4px rgba(232, 163, 61, 0.15);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-stage-bg text-ink font-body;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Slim, dark scrollbar for the lyrics pane */
+.lyrics-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.lyrics-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lyrics-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-stage-border);
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+  }
+}
