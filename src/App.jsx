@@ -4,106 +4,129 @@ import { useTheme } from './hooks/useTheme.js'
 import SongPicker from './components/SongPicker.jsx'
 import LyricsEditor from './components/LyricsEditor.jsx'
 import LyricsViewer from './components/LyricsViewer.jsx'
+import Toast from './components/Toast.jsx'
 
-const BLANK = { id: null, title: '', artist: '', lyrics: '', fontSize: 28, speed: 30 }
+const BLANK = { id: null, title: '', artist: '', lyrics: '', fontSize: 20, speed: 10 }
 const EXPAND_BREAKS_KEY = 'lyric-scroller:expand-breaks'
 
 function getInitialExpandBreaks() {
-  try {
-    return localStorage.getItem(EXPAND_BREAKS_KEY) === '1'
-  } catch {
-    return false
-  }
+  try { return localStorage.getItem(EXPAND_BREAKS_KEY) === '1' } catch { return false }
 }
 
 export default function App() {
   const { songs, upsertSong, deleteSong, exportSongs, importSongs } = useSongLibrary()
   const { theme, toggleTheme } = useTheme()
-  const [draft, setDraft] = useState(BLANK)
-  const [mode, setMode] = useState('edit') // 'edit' | 'play'
+  const [draft, setDraft] = useState(() => songs[0] ?? BLANK)
+  const [mode, setMode] = useState('play') // 'play' | 'edit'
   const [expandBreaks, setExpandBreaks] = useState(getInitialExpandBreaks)
-  const [statusMessage, setStatusMessage] = useState(null)
+  const [toast, setToast] = useState(null)
+  const toastTimerRef = useRef(null)
   const fileInputRef = useRef(null)
 
+  const showToast = (msg) => {
+    setToast(msg)
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+  }
+
+  useEffect(() => () => clearTimeout(toastTimerRef.current), [])
+
   useEffect(() => {
-    try {
-      localStorage.setItem(EXPAND_BREAKS_KEY, expandBreaks ? '1' : '0')
-    } catch {
-      // ignore write failures
-    }
+    try { localStorage.setItem(EXPAND_BREAKS_KEY, expandBreaks ? '1' : '0') } catch { /* ignore */ }
   }, [expandBreaks])
 
-  // Auto-clear transient status messages (e.g. "Imported 4 songs")
-  useEffect(() => {
-    if (!statusMessage) return
-    const t = setTimeout(() => setStatusMessage(null), 4000)
-    return () => clearTimeout(t)
-  }, [statusMessage])
-
-  const savedVersion = useMemo(
-    () => songs.find((s) => s.id === draft.id),
-    [songs, draft.id]
-  )
+  const savedVersion = useMemo(() => songs.find((s) => s.id === draft.id), [songs, draft.id])
 
   const isDirty = useMemo(() => {
     if (!savedVersion) return Boolean(draft.title || draft.artist || draft.lyrics)
-    return (
-      savedVersion.title !== draft.title ||
-      savedVersion.artist !== draft.artist ||
-      savedVersion.lyrics !== draft.lyrics
-    )
+    return savedVersion.title !== draft.title || savedVersion.artist !== draft.artist || savedVersion.lyrics !== draft.lyrics
   }, [savedVersion, draft])
+
+  const saveAndToast = (overrideDraft) => {
+    const base = overrideDraft ?? draft
+    const id = base.id || crypto.randomUUID()
+    const toSave = { ...base, id }
+    upsertSong(toSave)
+    setDraft(toSave)
+    showToast(`Saved "${toSave.title || 'Untitled'}"`)
+    return toSave
+  }
 
   const loadSong = (id) => {
     const song = songs.find((s) => s.id === id)
     if (song) setDraft(song)
   }
 
-  const handleSave = () => {
-    const id = draft.id || crypto.randomUUID()
-    const toSave = { ...draft, id }
-    upsertSong(toSave)
-    setDraft(toSave)
-  }
-
   const handleDelete = () => {
     if (draft.id) deleteSong(draft.id)
-    setDraft(BLANK)
+    setDraft(songs.find((s) => s.id !== draft.id) ?? BLANK)
+    setMode('play')
   }
-
-  const handleNew = () => setDraft(BLANK)
 
   const handleExport = () => {
     const json = exportSongs()
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    const date = new Date().toISOString().slice(0, 10)
     a.href = url
-    a.download = `lyric-scroller-export-${date}.json`
+    a.download = `lyric-scroller-export-${new Date().toISOString().slice(0, 10)}.json`
     document.body.appendChild(a)
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
   }
 
-  const handleImportClick = () => fileInputRef.current?.click()
-
   const handleImportFile = async (e) => {
     const file = e.target.files?.[0]
-    e.target.value = '' // allow re-selecting the same file later
+    e.target.value = ''
     if (!file) return
     try {
       const text = await file.text()
       const count = importSongs(text)
-      setStatusMessage(`Imported ${count} song${count === 1 ? '' : 's'}.`)
+      showToast(`Imported ${count} song${count === 1 ? '' : 's'}.`)
     } catch (err) {
-      setStatusMessage(err.message || 'Import failed.')
+      showToast(err.message || 'Import failed.')
     }
+  }
+
+  const handlePlay = () => {
+    if (isDirty) {
+      const saved = saveAndToast()
+      setDraft(saved)
+    }
+    setMode('play')
+  }
+
+  const handleFontSize = (fontSize) => {
+    setDraft((d) => ({ ...d, fontSize }))
+    if (draft.id) upsertSong({ ...draft, fontSize })
+  }
+
+  const handleSpeed = (speed) => {
+    setDraft((d) => ({ ...d, speed }))
+    if (draft.id) upsertSong({ ...draft, speed })
   }
 
   return (
     <div className="min-h-screen bg-stage-bg text-ink">
+      {mode === 'play' && (
+        <LyricsViewer
+          title={draft.title}
+          artist={draft.artist}
+          lyrics={draft.lyrics}
+          fontSize={draft.fontSize}
+          speed={draft.speed}
+          expandBreaks={expandBreaks}
+          songs={songs}
+          currentId={draft.id}
+          onSelectSong={loadSong}
+          onChangeFontSize={handleFontSize}
+          onChangeSpeed={handleSpeed}
+          onToggleExpandBreaks={() => setExpandBreaks((v) => !v)}
+          onEdit={() => setMode('edit')}
+        />
+      )}
+
       {mode === 'edit' && (
         <div className="max-w-md mx-auto">
           <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3 flex items-center justify-between gap-2">
@@ -130,10 +153,10 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={handleNew}
+                onClick={() => { setDraft(BLANK); }}
                 className="text-xs text-ink-faint border border-stage-border rounded-md px-2.5 py-1.5 active:scale-95 transition"
               >
-                New song
+                New
               </button>
             </div>
           </header>
@@ -153,21 +176,12 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={handleImportClick}
+              onClick={() => fileInputRef.current?.click()}
               className="text-xs text-ink-faint border border-stage-border rounded-md px-2.5 py-1.5 active:scale-95 transition"
             >
               Import
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json"
-              onChange={handleImportFile}
-              className="hidden"
-            />
-            {statusMessage && (
-              <span className="text-xs text-spot truncate">{statusMessage}</span>
-            )}
+            <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportFile} className="hidden" />
           </div>
 
           <LyricsEditor
@@ -177,43 +191,16 @@ export default function App() {
             onChangeTitle={(title) => setDraft((d) => ({ ...d, title }))}
             onChangeArtist={(artist) => setDraft((d) => ({ ...d, artist }))}
             onChangeLyrics={(lyrics) => setDraft((d) => ({ ...d, lyrics }))}
-            onSave={handleSave}
+            onSave={() => saveAndToast()}
             onDelete={handleDelete}
-            onPlay={() => {
-              if (isDirty) {
-                const id = draft.id || crypto.randomUUID()
-                const toSave = { ...draft, id }
-                upsertSong(toSave)
-                setDraft(toSave)
-              }
-              setMode('play')
-            }}
+            onPlay={handlePlay}
             hasSavedVersion={Boolean(savedVersion)}
             isDirty={isDirty}
           />
         </div>
       )}
 
-      {mode === 'play' && (
-        <LyricsViewer
-          title={draft.title}
-          artist={draft.artist}
-          lyrics={draft.lyrics}
-          fontSize={draft.fontSize}
-          speed={draft.speed}
-          expandBreaks={expandBreaks}
-          onChangeFontSize={(fontSize) => {
-            setDraft((d) => ({ ...d, fontSize }))
-            if (draft.id) upsertSong({ ...draft, fontSize })
-          }}
-          onChangeSpeed={(speed) => {
-            setDraft((d) => ({ ...d, speed }))
-            if (draft.id) upsertSong({ ...draft, speed })
-          }}
-          onToggleExpandBreaks={() => setExpandBreaks((v) => !v)}
-          onBack={() => setMode('edit')}
-        />
-      )}
+      <Toast message={toast} />
     </div>
   )
 }
