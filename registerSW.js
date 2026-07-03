@@ -1,15 +1,13 @@
 export function registerSW() {
-  console.log("Registering SW");
   if (!("serviceWorker" in navigator)) return;
-  console.log("SW in navigator");
 
-  console.log("adding ev listener on load");
-  window.addEventListener("load", async () => {
-    console.log("about to register");
-    const promise = navigator.serviceWorker
-      .register("./sw.js")
-      .catch((err) => console.warn("SW registration failed:", err));
-    await promise;
-    console.log("registration successful");
+  window.addEventListener("load", () => {
+    // Derive the base path so this works regardless of repo name on GitHub Pages
+    const base = import.meta.env.BASE_URL;
+    navigator.serviceWorker
+      .register(`${base}sw.js`)
+      .then((reg) => console.log("SW registered, scope:", reg.scope))
+      .catch((err) => console.error("SW registration failed:", err));
   });
 }
+
