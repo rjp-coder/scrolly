@@ -1,9 +1,15 @@
 export function registerSW() {
-  if (!('serviceWorker' in navigator)) return
+  console.log("Registering SW");
+  if (!("serviceWorker" in navigator)) return;
+  console.log("SW in navigator");
 
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('./sw.js')
-      .catch((err) => console.warn('SW registration failed:', err))
-  })
+  console.log("adding ev listener on load");
+  window.addEventListener("load", async () => {
+    console.log("about to register");
+    const promise = navigator.serviceWorker
+      .register("./sw.js")
+      .catch((err) => console.warn("SW registration failed:", err));
+    await promise;
+    console.log("registration successful");
+  });
 }
